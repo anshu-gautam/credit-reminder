@@ -32,14 +32,38 @@ export function allAdapters(): ProviderAdapter[] {
   return Object.values(adapters);
 }
 
-// Polls every enabled provider, derives health state from current thresholds,
-// updates the snapshot cache, and tracks consecutive polling failures so a
-// provider_polling_failed alert can fire after repeated failures (FR-4).
-export async function pollProviders(): Promise<ProviderBudgetSnapshot[]> {
+// Timestamp (ms) of the last fetch *attempt* per provider. Separate from the
+// registry's displayed lastPolledAt so the seeded display value does not
+// suppress the very first live fetch.
+const lastAttemptMs: Partial<Record<ProviderName, number>> = {};
+
+// Polls enabled providers, derives health state from current thresholds, updates
+// the snapshot cache, and tracks consecutive polling failures (FR-4).
+//
+// Each provider is only re-fetched once its pollIntervalMinutes has elapsed;
+// within the interval the cached snapshot is reused. This respects the per-
+// provider poll cadence and prevents hammering provider APIs on every request.
+// Pass { force: true } to bypass the interval (e.g. a manual poll).
+export async function pollProviders(
+  opts: { force?: boolean } = {},
+): Promise<ProviderBudgetSnapshot[]> {
+  const force = opts.force ?? false;
   const lastKnown = getSnapshots();
+  const now = Date.now();
+
   const results = await Promise.all(
     providerRegistry.map(async (reg): Promise<ProviderBudgetSnapshot> => {
       const adapter = getAdapter(reg.name);
+      const previous = lastKnown.find((s) => s.provider === reg.name);
+      const attemptedAt = lastAttemptMs[reg.name] ?? 0;
+      const intervalMs = reg.pollIntervalMinutes * 60_000;
+
+      // Not due yet — reuse the cached snapshot.
+      if (!force && previous && now - attemptedAt < intervalMs) {
+        return previous;
+      }
+
+      lastAttemptMs[reg.name] = now;
       try {
         const data = await adapter.fetchBudgetSnapshot();
         const state = computeProviderState(
@@ -53,7 +77,6 @@ export async function pollProviders(): Promise<ProviderBudgetSnapshot[]> {
         // Keep the last known snapshot but mark health unknown (FR-3: polling
         // failures must not crash the app).
         reg.consecutivePollingFailures += 1;
-        const previous = lastKnown.find((s) => s.provider === reg.name);
         const normalized = adapter.classifyError(error);
         const base: ProviderBudgetSnapshot =
           previous ?? {

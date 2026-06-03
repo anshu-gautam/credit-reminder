@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth";
 import { providerRegistry } from "@/lib/store";
+import { pollProviders } from "@/lib/providers";
 import type { ProviderName } from "@/lib/types";
 
 // POST /admin/ai/providers/{provider}/policy  (PRD §20.5)
@@ -42,5 +43,9 @@ export async function POST(
   if (body.emergencyPercent != null) entry.emergencyPercent = body.emergencyPercent;
   if (body.pollIntervalMinutes != null) entry.pollIntervalMinutes = body.pollIntervalMinutes;
 
-  return NextResponse.json({ provider: entry.name, policy: entry });
+  // Re-poll so the new thresholds are reflected in provider health immediately.
+  const snapshots = await pollProviders({ force: true });
+  const snapshot = snapshots.find((s) => s.provider === entry.name);
+
+  return NextResponse.json({ provider: entry.name, policy: entry, snapshot });
 }

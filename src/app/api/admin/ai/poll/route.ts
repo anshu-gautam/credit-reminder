@@ -12,7 +12,8 @@ export async function POST(request: Request) {
   const denied = requireAdmin(request);
   if (denied) return denied;
 
-  const snapshots = await pollProviders();
+  // Manual poll bypasses the per-provider interval.
+  const snapshots = await pollProviders({ force: true });
 
   const window: ProviderUsageQuery = {
     startTime: startOfMonth().toISOString(),
