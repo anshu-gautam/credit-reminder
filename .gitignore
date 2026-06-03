@@ -26,6 +26,9 @@ yarn-error.log*
 .env*.local
 .env
 
+# runtime persisted state
+/.data
+
 # vercel
 .vercel
 

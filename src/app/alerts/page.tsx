@@ -4,18 +4,34 @@ import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/page-header";
 import { SeverityBadge } from "@/components/status-badge";
 import { alertEvents } from "@/lib/store";
+import { pollAndAlert } from "@/lib/providers";
+import { loadState } from "@/lib/persistence";
+import type { AlertEvent } from "@/lib/types";
 import { formatRelativeTime, formatUsd } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 const channelLabel: Record<string, string> = {
   slack: "Slack",
   email: "Email",
   pagerduty: "PagerDuty",
+  console: "Console",
   discord: "Discord",
 };
 
-export default function AlertsPage() {
-  const active = alertEvents.filter((a) => !a.resolvedAt);
-  const resolved = alertEvents.filter((a) => a.resolvedAt);
+export default async function AlertsPage() {
+  // Evaluate current state so freshly dispatched alerts appear, then read the
+  // persisted history and append the seeded examples.
+  await pollAndAlert();
+  const history = loadState().alertHistory;
+  const seen = new Set(history.map((a) => a.dedupeKey));
+  const all: AlertEvent[] = [
+    ...history,
+    ...alertEvents.filter((a) => !seen.has(a.dedupeKey)),
+  ];
+
+  const active = all.filter((a) => !a.resolvedAt);
+  const resolved = all.filter((a) => a.resolvedAt);
 
   return (
     <div className="mx-auto max-w-5xl">

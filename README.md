@@ -31,8 +31,12 @@ described there, surfaced as an admin dashboard plus admin APIs.
 | `GET`  | `/api/admin/ai/usage?start=&end=&groupBy=provider,feature,model` | Normalized usage breakdown |
 | `POST` | `/api/admin/ai/features/{featureName}/state` | Update feature runtime state |
 | `POST` | `/api/admin/ai/providers/{provider}/policy` | Update provider thresholds/policy |
-| `POST` | `/api/admin/ai/poll` | Trigger a provider poll; returns refreshed snapshots, liveness, and polling-failure counts |
-| `POST` | `/api/ai/gateway` | Internal AI Gateway — budget-checks a feature and returns the runtime decision (PRD §35) |
+| `POST` | `/api/admin/ai/poll` | Force a provider poll + alert evaluation; returns snapshots, liveness, failure counts, alerts dispatched |
+| `GET`  | `/api/admin/ai/alerts` | Dispatched alert history (PRD §19.4) |
+| `GET`  | `/api/admin/ai/forecast` | Burn rate and time-to-exhaustion per provider (PRD FR-12) |
+| `GET`  | `/api/admin/ai/queue` | List queued/processed jobs |
+| `POST` | `/api/admin/ai/queue` | Drain a provider's queued jobs (`{ "provider": "..." }`) |
+| `POST` | `/api/ai/gateway` | Internal AI Gateway — budget-checks a feature, enqueues when policy says queue, returns the runtime decision (PRD §35) |
 
 Admin routes are guarded by `requireAdmin` (`src/lib/auth.ts`): when `ADMIN_API_TOKEN`
 is set they require `Authorization: Bearer <token>`; when unset they stay open for
@@ -64,6 +68,35 @@ every enabled provider, derives health state from the registry thresholds, updat
 the snapshot cache, and tracks consecutive polling failures (PRD FR-3, FR-4). A
 failed provider degrades to `auth_error`/`unknown` without taking down the others.
 Calls have a bounded timeout; billing/credit errors are never retried (FR-8).
+
+## Alerting, scheduler, queue, forecasting
+
+- **Alert engine** (`src/lib/alerts/`) — turns provider/feature state into
+  deduplicated, escalated, recovery-aware alerts (PRD FR-5, FR-11, §21).
+  Severity drives channels: warning/critical → Slack + email; emergency →
+  Slack + email + PagerDuty. **Slack** posts Block Kit messages to
+  `SLACK_WEBHOOK_URL`; email relays via `ALERT_EMAIL_WEBHOOK_URL`; PagerDuty uses
+  the Events API. With no channel configured an alert is logged to the server
+  console, so the flow is fully exercisable offline. Dedupe windows: warning 6h,
+  critical 45m, emergency always; recovery fires once and clears the dedupe state.
+- **Background scheduler** (`src/lib/scheduler.ts`, started from
+  `src/instrumentation.ts`) — runs `pollAndAlert` on the shortest provider
+  interval so budgets are checked and alerts fire without a user request (FR-4).
+  Disable with `AI_BUDGET_MONITOR_ENABLED=false`.
+- **Job queue** (`src/lib/queue.ts`) — when the gateway decides `queue`, the job
+  is persisted; on provider recovery the queue is drained automatically (FR-7).
+- **Forecasting** (`src/lib/forecast.ts`) — burn rate over 15m/1h/24h/7d windows,
+  time-to-exhaustion, and 3× spike detection from the gateway log (FR-12).
+- **Persistence** (`src/lib/persistence.ts`) — alert history, dedupe state, and
+  the queue are written to a JSON file (`DATA_DIR`, default `./.data`), falling
+  back to in-memory only on a read-only filesystem.
+
+## Tests
+
+`npm test` runs the Node built-in test runner (via `tsx`) over `test/*.test.ts`,
+covering the threshold engine, error classification/retry safety, runtime
+decisions, burn-rate forecasting, and alert dedupe/escalation — mapping to the
+PRD §29 scenarios.
 
 ## Core modules
 
@@ -104,20 +137,15 @@ To go live:
 > Provider admin/management keys must remain server-side only and never be
 > exposed to the client (PRD §23).
 
-## Known limitations (prototype)
+## Known limitations
 
-This is a Phase-1 foundation. Be aware that:
-
-- **State is in-memory and per-instance.** The store (`src/lib/store.ts`) is a
-  module-level array, so the `POST` admin endpoints (`/features/{name}/state`,
-  `/providers/{provider}/policy`) mutate process memory only. On a serverless or
-  multi-instance deployment these changes are **not shared across instances and
-  are lost on cold start** — they are illustrative until the store is backed by a
-  real database. Within a single long-lived server they persist as expected.
-- **Live adapters, but on-request polling.** The three provider adapters call the
-  real APIs when keys are set; polling currently happens on each admin
-  request/page load rather than via a background scheduler/cron (PRD §36).
+- **Reference config lives in code.** The provider registry and feature catalog
+  in `src/lib/store.ts` are seeded; their `POST`-mutated runtime fields (feature
+  state, provider thresholds) are in-memory. Alert history and the job queue are
+  persisted to disk, but on a read-only/multi-instance serverless deployment the
+  file store degrades to in-memory per instance — a real database (PRD §19) is
+  the production form.
 - **Usage breakdown is seeded.** `fetchBudgetSnapshot` is live; `fetchUsageBreakdown`
-  still reports from the gateway event log pending per-provider usage-API wiring.
-- **No alert delivery, no test suite.** Alert channels and the PRD §29 test cases
-  are not yet implemented.
+  reports from the gateway event log pending per-provider usage-API wiring.
+- **Forecasting uses the gateway log.** Burn rate is computed from the seeded
+  usage events rather than live per-provider usage data.

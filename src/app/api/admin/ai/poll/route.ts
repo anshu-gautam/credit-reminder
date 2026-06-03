@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth";
-import { allAdapters, pollProviders } from "@/lib/providers";
+import { allAdapters, pollAndAlert } from "@/lib/providers";
 import { providerRegistry } from "@/lib/store";
 import { startOfMonth } from "@/lib/providers/http";
 import type { ProviderUsageQuery } from "@/lib/types";
@@ -12,8 +12,8 @@ export async function POST(request: Request) {
   const denied = requireAdmin(request);
   if (denied) return denied;
 
-  // Manual poll bypasses the per-provider interval.
-  const snapshots = await pollProviders({ force: true });
+  // Manual poll bypasses the per-provider interval and runs the alert engine.
+  const { snapshots, alerts } = await pollAndAlert({ force: true });
 
   const window: ProviderUsageQuery = {
     startTime: startOfMonth().toISOString(),
@@ -40,5 +40,10 @@ export async function POST(request: Request) {
     }),
   );
 
-  return NextResponse.json({ polledAt: new Date().toISOString(), adapters, snapshots });
+  return NextResponse.json({
+    polledAt: new Date().toISOString(),
+    adapters,
+    alertsDispatched: alerts.length,
+    snapshots,
+  });
 }

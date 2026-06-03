@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { classifyError, evaluateDecision, isRetryable } from "@/lib/policy";
 import { featureBudgets } from "@/lib/store";
 import { pollProviders } from "@/lib/providers";
+import { enqueueJob } from "@/lib/queue";
 
 // POST /api/ai/gateway  — simplified internal AI Gateway (PRD §13, §35).
 //
@@ -58,9 +59,15 @@ export async function POST(request: Request) {
     });
   }
   if (decision === "queue") {
+    const job = enqueueJob({
+      feature: feature.featureName,
+      provider: feature.currentProvider,
+      customerId: body.customerId,
+    });
     return NextResponse.json({
       ...trace,
       status: "queued",
+      jobId: job.id,
       message:
         "Your request has been queued and will be processed once AI capacity is restored.",
     });

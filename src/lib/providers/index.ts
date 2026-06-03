@@ -9,11 +9,15 @@ import type {
 } from "@/lib/types";
 import { computeProviderState } from "@/lib/policy";
 import {
+  featureBudgets,
   getSnapshots,
   providerRegistry,
   setSnapshots,
   thresholdsFor,
 } from "@/lib/store";
+import { forecastProvider } from "@/lib/forecast";
+import { evaluateAndDispatch } from "@/lib/alerts/engine";
+import type { AlertEvent } from "@/lib/types";
 import { openRouterAdapter } from "./openrouter";
 import { openAiAdapter } from "./openai";
 import { anthropicAdapter } from "./anthropic";
@@ -72,7 +76,12 @@ export async function pollProviders(
         );
         reg.lastPolledAt = new Date().toISOString();
         reg.consecutivePollingFailures = 0;
-        return { ...data, state };
+        const snapshot: ProviderBudgetSnapshot = { ...data, state };
+        // Forecast time-to-exhaustion from the gateway usage log (FR-12).
+        const forecast = forecastProvider(snapshot);
+        snapshot.estimatedHoursRemaining =
+          forecast.estimatedHoursRemaining ?? data.estimatedHoursRemaining;
+        return snapshot;
       } catch (error) {
         // Keep the last known snapshot but mark health unknown (FR-3: polling
         // failures must not crash the app).
@@ -100,4 +109,14 @@ export async function pollProviders(
 // True when at least one provider has a live credential configured.
 export function anyProviderLive(): boolean {
   return allAdapters().some((a) => a.isLive());
+}
+
+// Polls providers and then runs the alert engine over the fresh snapshots.
+// This is the entry point for the scheduler and admin status/poll endpoints.
+export async function pollAndAlert(
+  opts: { force?: boolean } = {},
+): Promise<{ snapshots: ProviderBudgetSnapshot[]; alerts: AlertEvent[] }> {
+  const snapshots = await pollProviders(opts);
+  const alerts = await evaluateAndDispatch(snapshots, featureBudgets, providerRegistry);
+  return { snapshots, alerts };
 }

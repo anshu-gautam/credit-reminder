@@ -75,7 +75,10 @@ export function evaluateDecision(
   }
 
   if (state === "critical") {
-    if (feature.priority === "critical" || feature.priority === "high") {
+    // Only critical-priority features are force-kept running in a critical
+    // state; every other feature honors its configured low-budget behavior so
+    // queue_jobs/pause/switch_model are not silently ignored.
+    if (feature.priority === "critical") {
       return feature.lowBudgetBehavior === "switch_to_cheaper_model"
         ? "allow_with_cheaper_model"
         : "allow";
