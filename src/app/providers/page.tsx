@@ -12,8 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/page-header";
 import { HealthBadge } from "@/components/status-badge";
-import { getSnapshots, providerRegistry } from "@/lib/store";
+import { providerRegistry } from "@/lib/store";
+import { pollProviders } from "@/lib/providers";
 import { formatRelativeTime, formatUsd } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 const billingLabel: Record<string, string> = {
   prepaid_credits: "Prepaid credits",
@@ -30,8 +33,8 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ProvidersPage() {
-  const snapshots = getSnapshots();
+export default async function ProvidersPage() {
+  const snapshots = await pollProviders();
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader

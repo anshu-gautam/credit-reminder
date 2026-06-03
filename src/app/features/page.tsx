@@ -15,11 +15,12 @@ import {
   FeatureStateBadge,
   PriorityBadge,
 } from "@/components/status-badge";
-import { featureBudgets, getSnapshots } from "@/lib/store";
+import { featureBudgets } from "@/lib/store";
+import { pollProviders } from "@/lib/providers";
 import { evaluateDecision } from "@/lib/policy";
 import { formatUsd } from "@/lib/utils";
 
-const snapshots = getSnapshots();
+export const dynamic = "force-dynamic";
 
 const behaviorLabel: Record<string, string> = {
   continue: "Continue",
@@ -29,7 +30,8 @@ const behaviorLabel: Record<string, string> = {
   disable: "Disable",
 };
 
-export default function FeaturesPage() {
+export default async function FeaturesPage() {
+  const snapshots = await pollProviders();
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader

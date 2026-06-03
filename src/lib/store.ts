@@ -10,6 +10,7 @@ import type {
   ProviderHealthState,
   ProviderName,
   ProviderRegistryEntry,
+  ProviderUsageBreakdown,
   UsageEvent,
 } from "./types";
 import { computeProviderState } from "./policy";
@@ -59,7 +60,7 @@ export const providerRegistry: ProviderRegistryEntry[] = [
   },
 ];
 
-function thresholdsFor(provider: ProviderName) {
+export function thresholdsFor(provider: ProviderName) {
   const r = providerRegistry.find((p) => p.name === provider)!;
   return {
     warningThresholdUsd: r.warningThresholdUsd,
@@ -107,13 +108,34 @@ const rawSnapshots: Array<Omit<ProviderBudgetSnapshot, "state">> = [
   },
 ];
 
-// Computed on each call so changes to registry thresholds (e.g. via the policy
-// API) are reflected immediately, keeping the threshold engine authoritative.
-export function getSnapshots(): ProviderBudgetSnapshot[] {
-  return rawSnapshots.map((s) => ({
+// Computes health state from current registry thresholds for a measured snapshot.
+function withState(s: Omit<ProviderBudgetSnapshot, "state">): ProviderBudgetSnapshot {
+  return {
     ...s,
     state: computeProviderState(s as ProviderBudgetSnapshot, thresholdsFor(s.provider)),
-  }));
+  };
+}
+
+// Latest polled snapshots. Populated by the poller (src/lib/providers); until
+// the first poll (or when no provider keys are configured) the seeded data is
+// used so the dashboard is fully explorable offline.
+let snapshotCache: ProviderBudgetSnapshot[] | null = null;
+
+export function setSnapshots(next: ProviderBudgetSnapshot[]): void {
+  snapshotCache = next;
+}
+
+export function getSnapshots(): ProviderBudgetSnapshot[] {
+  if (snapshotCache) return snapshotCache;
+  return rawSnapshots.map(withState);
+}
+
+// Seeded measured values used as the adapter mock fallback (no live key set).
+export function mockSnapshotData(
+  provider: ProviderName,
+): Omit<ProviderBudgetSnapshot, "state"> {
+  const seed = rawSnapshots.find((s) => s.provider === provider)!;
+  return { ...seed, lastCheckedAt: new Date().toISOString() };
 }
 
 export const featureBudgets: FeatureBudget[] = [
@@ -347,4 +369,42 @@ export function overallState(): ProviderHealthState {
       (worst, s) => (stateRank[s.state] > stateRank[worst] ? s.state : worst),
       "healthy",
     );
+}
+
+// Seeded usage breakdown used as the adapter mock fallback (no live key set).
+// Groups the gateway event log for one provider by model + feature.
+export function mockUsageBreakdown(
+  provider: ProviderName,
+  params: { startTime: string; endTime: string },
+): ProviderUsageBreakdown[] {
+  const startMs = new Date(params.startTime).getTime();
+  const endMs = new Date(params.endTime).getTime();
+  const map = new Map<string, ProviderUsageBreakdown>();
+
+  for (const e of usageEvents) {
+    if (e.provider !== provider) continue;
+    const t = new Date(e.createdAt).getTime();
+    if (t < startMs || t > endMs) continue;
+    const groupKey = `${e.model}::${e.featureName}`;
+    const row = map.get(groupKey) ?? {
+      provider,
+      feature: e.featureName,
+      model: e.model,
+      apiKeyAlias: e.apiKeyAlias,
+      inputTokens: 0,
+      outputTokens: 0,
+      requestCount: 0,
+      estimatedCostUsd: 0,
+      startTime: params.startTime,
+      endTime: params.endTime,
+    };
+    row.inputTokens = (row.inputTokens ?? 0) + (e.inputTokens ?? 0);
+    row.outputTokens = (row.outputTokens ?? 0) + (e.outputTokens ?? 0);
+    row.requestCount = (row.requestCount ?? 0) + e.requestCount;
+    row.estimatedCostUsd = Number(
+      ((row.estimatedCostUsd ?? 0) + (e.estimatedCostUsd ?? 0)).toFixed(4),
+    );
+    map.set(groupKey, row);
+  }
+  return [...map.values()];
 }

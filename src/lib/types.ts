@@ -174,6 +174,28 @@ export interface UsageEvent {
   createdAt: string;
 }
 
+// Measured snapshot data returned by an adapter; health state is derived
+// centrally by the poller from the registry thresholds.
+export type ProviderSnapshotData = Omit<ProviderBudgetSnapshot, "state">;
+
+export interface ProviderUsageQuery {
+  startTime: string;
+  endTime: string;
+  groupBy: Array<"feature" | "api_key" | "model" | "project" | "workspace" | "customer">;
+}
+
+// The provider adapter contract from PRD §14. Each provider implements the same
+// interface so the gateway and poller stay provider-agnostic.
+export interface ProviderAdapter {
+  name: ProviderName;
+  // True when a live credential is configured; otherwise the adapter serves
+  // seeded mock data so the app is usable without secrets.
+  isLive(): boolean;
+  fetchBudgetSnapshot(): Promise<ProviderSnapshotData>;
+  fetchUsageBreakdown(params: ProviderUsageQuery): Promise<ProviderUsageBreakdown[]>;
+  classifyError(error: unknown): NormalizedProviderError;
+}
+
 export interface ProviderStatusResponse {
   overallState: ProviderHealthState;
   providers: Array<{

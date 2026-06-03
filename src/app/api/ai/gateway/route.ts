@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { classifyError, evaluateDecision, isRetryable } from "@/lib/policy";
-import { featureBudgets, getSnapshots } from "@/lib/store";
+import { featureBudgets } from "@/lib/store";
+import { pollProviders } from "@/lib/providers";
 
 // POST /api/ai/gateway  — simplified internal AI Gateway (PRD §13, §35).
 //
@@ -34,7 +35,8 @@ export async function POST(request: Request) {
 
   // 3–6. Evaluate budget + provider health and select the runtime action.
   // Evaluate against the provider the feature is currently routed to.
-  const snapshot = getSnapshots().find((s) => s.provider === feature.currentProvider)!;
+  const snapshots = await pollProviders();
+  const snapshot = snapshots.find((s) => s.provider === feature.currentProvider)!;
   const decision = evaluateDecision(feature, snapshot);
 
   const trace = {

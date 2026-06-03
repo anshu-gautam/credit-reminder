@@ -17,10 +17,12 @@ import { HealthBadge, SeverityBadge, FeatureStateBadge } from "@/components/stat
 import {
   alertEvents,
   featureBudgets,
-  getSnapshots,
   overallState,
   providerRegistry,
 } from "@/lib/store";
+import { pollProviders } from "@/lib/providers";
+
+export const dynamic = "force-dynamic";
 import { totals } from "@/lib/aggregate";
 import type { ProviderBudgetSnapshot } from "@/lib/types";
 import { formatRelativeTime, formatUsd } from "@/lib/utils";
@@ -41,8 +43,8 @@ function indicatorClass(state: string): string {
   return "bg-success";
 }
 
-export default function OverviewPage() {
-  const snapshots = getSnapshots();
+export default async function OverviewPage() {
+  const snapshots = await pollProviders();
   const t = totals();
   const monthlySpend = featureBudgets.reduce((s, f) => s + f.currentMonthlyUsageUsd, 0);
   const monthlyBudget = featureBudgets.reduce((s, f) => s + f.monthlyBudgetUsd, 0);

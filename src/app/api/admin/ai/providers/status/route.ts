@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth";
-import { getSnapshots, overallState, providerRegistry } from "@/lib/store";
+import { overallState, providerRegistry } from "@/lib/store";
+import { pollProviders } from "@/lib/providers";
 import type { ProviderStatusResponse } from "@/lib/types";
 
 // GET /admin/ai/providers/status  (PRD §10 FR-10, §20.1)
@@ -9,7 +10,9 @@ export async function GET(request: Request) {
   const denied = requireAdmin(request);
   if (denied) return denied;
 
-  const snapshots = getSnapshots();
+  // Poll adapters (live when keys are configured, mock otherwise) so the status
+  // reflects current data and the snapshot cache is refreshed.
+  const snapshots = await pollProviders();
   const body: ProviderStatusResponse = {
     overallState: overallState(),
     providers: snapshots.map((s) => {
