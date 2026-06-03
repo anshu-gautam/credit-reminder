@@ -17,14 +17,15 @@ import { HealthBadge, SeverityBadge, FeatureStateBadge } from "@/components/stat
 import {
   alertEvents,
   featureBudgets,
+  getSnapshots,
   overallState,
   providerRegistry,
-  snapshots,
 } from "@/lib/store";
 import { totals } from "@/lib/aggregate";
+import type { ProviderBudgetSnapshot } from "@/lib/types";
 import { formatRelativeTime, formatUsd } from "@/lib/utils";
 
-function providerBudgetPct(p: (typeof snapshots)[number]): number {
+function providerBudgetPct(p: ProviderBudgetSnapshot): number {
   if (p.remainingCreditsUsd !== undefined && p.totalCreditsUsd) {
     return Math.round((p.totalUsageUsd! / p.totalCreditsUsd) * 100);
   }
@@ -41,6 +42,7 @@ function indicatorClass(state: string): string {
 }
 
 export default function OverviewPage() {
+  const snapshots = getSnapshots();
   const t = totals();
   const monthlySpend = featureBudgets.reduce((s, f) => s + f.currentMonthlyUsageUsd, 0);
   const monthlyBudget = featureBudgets.reduce((s, f) => s + f.monthlyBudgetUsd, 0);

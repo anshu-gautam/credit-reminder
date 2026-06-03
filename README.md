@@ -83,3 +83,18 @@ explorable without credentials. To connect real data:
 
 > Provider admin/management keys must remain server-side only and never be
 > exposed to the client (PRD §23).
+
+## Known limitations (prototype)
+
+This is a Phase-1 foundation. Be aware that:
+
+- **State is in-memory and per-instance.** The store (`src/lib/store.ts`) is a
+  module-level array, so the `POST` admin endpoints (`/features/{name}/state`,
+  `/providers/{provider}/policy`) mutate process memory only. On a serverless or
+  multi-instance deployment these changes are **not shared across instances and
+  are lost on cold start** — they are illustrative until the store is backed by a
+  real database. Within a single long-lived server they persist as expected.
+- **No real provider data yet.** Snapshots and usage events are seeded; there are
+  no live adapters or poller (the first real step — see "Going live").
+- **No alert delivery, no test suite.** Alert channels and the PRD §29 test cases
+  are not yet implemented.

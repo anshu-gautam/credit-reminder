@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/page-header";
 import { HealthBadge } from "@/components/status-badge";
-import { providerRegistry, snapshots } from "@/lib/store";
+import { getSnapshots, providerRegistry } from "@/lib/store";
 import { formatRelativeTime, formatUsd } from "@/lib/utils";
 
 const billingLabel: Record<string, string> = {
@@ -31,6 +31,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export default function ProvidersPage() {
+  const snapshots = getSnapshots();
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader

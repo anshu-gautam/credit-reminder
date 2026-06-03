@@ -15,9 +15,11 @@ import {
   FeatureStateBadge,
   PriorityBadge,
 } from "@/components/status-badge";
-import { featureBudgets, snapshots } from "@/lib/store";
+import { featureBudgets, getSnapshots } from "@/lib/store";
 import { evaluateDecision } from "@/lib/policy";
 import { formatUsd } from "@/lib/utils";
+
+const snapshots = getSnapshots();
 
 const behaviorLabel: Record<string, string> = {
   continue: "Continue",
@@ -44,7 +46,7 @@ export default function FeaturesPage() {
           const dailyPct = f.dailyBudgetUsd
             ? Math.min(100, Math.round((f.currentDailyUsageUsd / f.dailyBudgetUsd) * 100))
             : 0;
-          const snapshot = snapshots.find((s) => s.provider === f.preferredProvider)!;
+          const snapshot = snapshots.find((s) => s.provider === f.currentProvider)!;
           const decision = evaluateDecision(f, snapshot);
           return (
             <Card key={f.featureName}>
@@ -105,7 +107,7 @@ export default function FeaturesPage() {
 
                 <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
                   <span className="text-xs text-muted-foreground">
-                    Gateway decision now ({f.preferredProvider} · {snapshot.state})
+                    Gateway decision now ({f.currentProvider} · {snapshot.state})
                   </span>
                   <DecisionBadge decision={decision} />
                 </div>

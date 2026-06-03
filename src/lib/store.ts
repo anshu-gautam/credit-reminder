@@ -107,10 +107,14 @@ const rawSnapshots: Array<Omit<ProviderBudgetSnapshot, "state">> = [
   },
 ];
 
-export const snapshots: ProviderBudgetSnapshot[] = rawSnapshots.map((s) => ({
-  ...s,
-  state: computeProviderState(s as ProviderBudgetSnapshot, thresholdsFor(s.provider)),
-}));
+// Computed on each call so changes to registry thresholds (e.g. via the policy
+// API) are reflected immediately, keeping the threshold engine authoritative.
+export function getSnapshots(): ProviderBudgetSnapshot[] {
+  return rawSnapshots.map((s) => ({
+    ...s,
+    state: computeProviderState(s as ProviderBudgetSnapshot, thresholdsFor(s.provider)),
+  }));
+}
 
 export const featureBudgets: FeatureBudget[] = [
   {
@@ -337,7 +341,7 @@ const stateRank: Record<ProviderHealthState, number> = {
 };
 
 export function overallState(): ProviderHealthState {
-  return snapshots
+  return getSnapshots()
     .filter((s) => providerRegistry.find((p) => p.name === s.provider)?.enabled)
     .reduce<ProviderHealthState>(
       (worst, s) => (stateRank[s.state] > stateRank[worst] ? s.state : worst),

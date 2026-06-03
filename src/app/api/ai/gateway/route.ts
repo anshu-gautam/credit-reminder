@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { classifyError, evaluateDecision, isRetryable } from "@/lib/policy";
-import { featureBudgets, snapshots } from "@/lib/store";
+import { featureBudgets, getSnapshots } from "@/lib/store";
 
 // POST /api/ai/gateway  — simplified internal AI Gateway (PRD §13, §35).
 //
@@ -33,13 +33,14 @@ export async function POST(request: Request) {
   }
 
   // 3–6. Evaluate budget + provider health and select the runtime action.
-  const snapshot = snapshots.find((s) => s.provider === feature.preferredProvider)!;
+  // Evaluate against the provider the feature is currently routed to.
+  const snapshot = getSnapshots().find((s) => s.provider === feature.currentProvider)!;
   const decision = evaluateDecision(feature, snapshot);
 
   const trace = {
     feature: feature.featureName,
     priority: feature.priority,
-    provider: feature.preferredProvider,
+    provider: feature.currentProvider,
     providerState: snapshot.state,
     monthlyBudgetUsd: feature.monthlyBudgetUsd,
     currentMonthlyUsageUsd: feature.currentMonthlyUsageUsd,
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
   // 7. "Execute" the request. simulateError lets callers exercise the runtime
   // error-normalization path (FR-8) without a live provider.
   if (body.simulateError) {
-    const normalizedError = classifyError(feature.preferredProvider, body.simulateError);
+    const normalizedError = classifyError(feature.currentProvider, body.simulateError);
     const retryable = isRetryable(normalizedError);
     return NextResponse.json({
       ...trace,

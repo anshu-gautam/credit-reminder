@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth";
-import { overallState, providerRegistry, snapshots } from "@/lib/store";
+import { getSnapshots, overallState, providerRegistry } from "@/lib/store";
 import type { ProviderStatusResponse } from "@/lib/types";
 
 // GET /admin/ai/providers/status  (PRD §10 FR-10, §20.1)
@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   const denied = requireAdmin(request);
   if (denied) return denied;
 
+  const snapshots = getSnapshots();
   const body: ProviderStatusResponse = {
     overallState: overallState(),
     providers: snapshots.map((s) => {
