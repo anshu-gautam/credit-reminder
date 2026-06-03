@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdmin } from "@/lib/auth";
 import { groupUsage } from "@/lib/aggregate";
 import { usageEvents } from "@/lib/store";
 
@@ -8,6 +9,9 @@ const VALID: GroupKey[] = ["provider", "feature", "model", "status"];
 
 // GET /admin/ai/usage?start=...&end=...&groupBy=provider,feature,model  (PRD §20.3)
 export async function GET(request: Request) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+
   const { searchParams } = new URL(request.url);
   const start = searchParams.get("start");
   const end = searchParams.get("end");

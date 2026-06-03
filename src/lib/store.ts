@@ -12,6 +12,7 @@ import type {
   ProviderRegistryEntry,
   UsageEvent,
 } from "./types";
+import { computeProviderState } from "./policy";
 
 const now = Date.now();
 const iso = (offsetMs = 0) => new Date(now - offsetMs).toISOString();
@@ -58,13 +59,26 @@ export const providerRegistry: ProviderRegistryEntry[] = [
   },
 ];
 
-export const snapshots: ProviderBudgetSnapshot[] = [
+function thresholdsFor(provider: ProviderName) {
+  const r = providerRegistry.find((p) => p.name === provider)!;
+  return {
+    warningThresholdUsd: r.warningThresholdUsd,
+    criticalThresholdUsd: r.criticalThresholdUsd,
+    emergencyThresholdUsd: r.emergencyThresholdUsd,
+    warnPercent: r.warnPercent,
+    criticalPercent: r.criticalPercent,
+    emergencyPercent: r.emergencyPercent,
+  };
+}
+
+// Raw snapshots carry only measured values; health state is derived from the
+// thresholds in the registry so the policy engine is the single source of truth.
+const rawSnapshots: Array<Omit<ProviderBudgetSnapshot, "state">> = [
   {
     provider: "openrouter",
     totalCreditsUsd: 100,
     totalUsageUsd: 95.28,
     remainingCreditsUsd: 4.72,
-    state: "critical",
     lastCheckedAt: iso(45 * 1000),
     estimatedHoursRemaining: 3.1,
     topFeature: "background-enrichment",
@@ -75,7 +89,6 @@ export const snapshots: ProviderBudgetSnapshot[] = [
     monthToDateSpendUsd: 720,
     monthlyBudgetUsd: 1000,
     remainingMonthlyBudgetUsd: 280,
-    state: "warning",
     lastCheckedAt: iso(2 * 60 * 1000),
     estimatedHoursRemaining: 96,
     topFeature: "main-chat",
@@ -87,13 +100,17 @@ export const snapshots: ProviderBudgetSnapshot[] = [
     monthlyBudgetUsd: 1000,
     monthlySpendLimitUsd: 1000,
     remainingMonthlyBudgetUsd: 780,
-    state: "healthy",
     lastCheckedAt: iso(80 * 1000),
     estimatedHoursRemaining: 410,
     topFeature: "document-summary",
     topModel: "claude-3.5-sonnet",
   },
 ];
+
+export const snapshots: ProviderBudgetSnapshot[] = rawSnapshots.map((s) => ({
+  ...s,
+  state: computeProviderState(s as ProviderBudgetSnapshot, thresholdsFor(s.provider)),
+}));
 
 export const featureBudgets: FeatureBudget[] = [
   {

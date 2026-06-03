@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdmin } from "@/lib/auth";
 import { providerRegistry } from "@/lib/store";
 import type { ProviderName } from "@/lib/types";
 
@@ -8,6 +9,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ provider: string }> },
 ) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+
   const { provider } = await params;
   const entry = providerRegistry.find((p) => p.name === (provider as ProviderName));
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdmin } from "@/lib/auth";
 import { featureBudgets } from "@/lib/store";
 import type { FeatureState } from "@/lib/types";
 
@@ -10,6 +11,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ featureName: string }> },
 ) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+
   const { featureName } = await params;
   const feature = featureBudgets.find((f) => f.featureName === featureName);
 

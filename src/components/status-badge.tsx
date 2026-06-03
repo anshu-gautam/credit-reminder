@@ -73,3 +73,17 @@ export function PriorityBadge({ priority }: { priority: string }) {
     </Badge>
   );
 }
+
+const decisionConfig: Record<string, { label: string; variant: Variant }> = {
+  allow: { label: "Allow", variant: "success" },
+  allow_with_cheaper_model: { label: "Downgrade model", variant: "warning" },
+  fallback_provider: { label: "Fallback provider", variant: "warning" },
+  queue: { label: "Queue", variant: "warning" },
+  pause: { label: "Pause", variant: "destructive" },
+  block_with_graceful_message: { label: "Block", variant: "destructive" },
+};
+
+export function DecisionBadge({ decision }: { decision: string }) {
+  const cfg = decisionConfig[decision] ?? { label: decision, variant: "secondary" as const };
+  return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
+}

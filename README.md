@@ -31,6 +31,20 @@ described there, surfaced as an admin dashboard plus admin APIs.
 | `GET`  | `/api/admin/ai/usage?start=&end=&groupBy=provider,feature,model` | Normalized usage breakdown |
 | `POST` | `/api/admin/ai/features/{featureName}/state` | Update feature runtime state |
 | `POST` | `/api/admin/ai/providers/{provider}/policy` | Update provider thresholds/policy |
+| `POST` | `/api/ai/gateway` | Internal AI Gateway — budget-checks a feature and returns the runtime decision (PRD §35) |
+
+Admin routes are guarded by `requireAdmin` (`src/lib/auth.ts`): when `ADMIN_API_TOKEN`
+is set they require `Authorization: Bearer <token>`; when unset they stay open for
+local exploration.
+
+Example gateway call:
+
+```bash
+curl -s -X POST http://localhost:3000/api/ai/gateway \
+  -H 'Content-Type: application/json' \
+  -d '{"feature":"background-enrichment"}'
+# -> { ..., "decision":"pause", "status":"unavailable", "message":"AI is temporarily unavailable..." }
+```
 
 ## Core modules
 

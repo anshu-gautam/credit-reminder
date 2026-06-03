@@ -10,8 +10,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import { FeatureStateBadge, PriorityBadge } from "@/components/status-badge";
-import { featureBudgets } from "@/lib/store";
+import {
+  DecisionBadge,
+  FeatureStateBadge,
+  PriorityBadge,
+} from "@/components/status-badge";
+import { featureBudgets, snapshots } from "@/lib/store";
+import { evaluateDecision } from "@/lib/policy";
 import { formatUsd } from "@/lib/utils";
 
 const behaviorLabel: Record<string, string> = {
@@ -39,6 +44,8 @@ export default function FeaturesPage() {
           const dailyPct = f.dailyBudgetUsd
             ? Math.min(100, Math.round((f.currentDailyUsageUsd / f.dailyBudgetUsd) * 100))
             : 0;
+          const snapshot = snapshots.find((s) => s.provider === f.preferredProvider)!;
+          const decision = evaluateDecision(f, snapshot);
           return (
             <Card key={f.featureName}>
               <CardHeader>
@@ -94,6 +101,13 @@ export default function FeaturesPage() {
                     <p className="text-xs text-muted-foreground">Low-budget behavior</p>
                     <p className="font-medium">{behaviorLabel[f.lowBudgetBehavior]}</p>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
+                  <span className="text-xs text-muted-foreground">
+                    Gateway decision now ({f.preferredProvider} · {snapshot.state})
+                  </span>
+                  <DecisionBadge decision={decision} />
                 </div>
 
                 <div>
